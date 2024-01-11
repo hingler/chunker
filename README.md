@@ -1,2 +1,2 @@
 # chunker
-little header-only library for some chunk stuff
+little library for some chunk stuff
