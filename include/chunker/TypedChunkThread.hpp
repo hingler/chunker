@@ -4,6 +4,11 @@
 #include "chunker/ChunkIdentifier.hpp"
 #include "chunker/traits/chunk_gen_type.hpp"
 
+#include <tbb/concurrent_queue.h>
+
+
+#include "debug/Logger.hpp"
+
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -17,8 +22,9 @@ namespace chunker {
     public:
     TypedChunkThread(
       std::shared_ptr<ChunkGenerator> generator,
-      util::LRUCache<chunker::ChunkIdentifier, std::shared_ptr<ChunkType>>& cache
-    ) : generator_(generator), chunk_cache_(cache), thread_active_(true) {
+      util::LRUCache<chunker::ChunkIdentifier, std::shared_ptr<ChunkType>>& cache,
+      tbb::concurrent_queue<chunker::ChunkIdentifier>& queue
+    ) : generator_(generator), chunk_cache_(cache), chunk_queue_(queue), thread_active_(true) {
       thread_ = std::thread(&TypedChunkThread::ThreadFunc, this);
     }
 
@@ -27,23 +33,14 @@ namespace chunker {
     TypedChunkThread operator=(const TypedChunkThread& other) = delete;
     TypedChunkThread operator=(TypedChunkThread&& other) = delete;
 
-    void Enqueue(const chunker::ChunkIdentifier& identifier) {
-      // enqueues a chunk on this thread
-      std::unique_lock<std::mutex> lock(queue_lock_);
-      chunk_queue_.push(identifier);
-      ++task_count_;
-      cond_.notify_all();
-    }
-
-    size_t GetQueueSize() {
-      // return size of underlying queue
-      std::unique_lock lock(queue_lock_);
-      return task_count_;
-    }
-
     void Wait() {
+      // how long do we wait for??
       std::unique_lock<std::mutex> lock(queue_lock_);
-        wait_cond_.wait(lock, [&]{ return chunk_queue_.size() == 0 || !thread_active_; });
+      wait_cond_.wait(lock, [&]{ return chunk_queue_.empty() || !thread_active_; });
+    }
+
+    void RefreshThread() {
+      cond_.notify_all();
     }
 
     ~TypedChunkThread() {
@@ -65,44 +62,42 @@ namespace chunker {
       while (true) {
         {
           std::unique_lock<std::mutex> lock(queue_lock_);
-          if (chunk_queue_.size() <= 0) {
+          if (chunk_queue_.empty()) {
             // notify waiters that thread is done
             wait_cond_.notify_all();
           }
 
-          cond_.wait(lock, [&] { return chunk_queue_.size() > 0 || !thread_active_; });
+          cond_.wait(lock, [&] { return !chunk_queue_.empty() || !thread_active_; });
           if (!thread_active_) {
             return;
           }
-
-          next_chunk = chunk_queue_.front();
         }
 
-        std::shared_ptr<ChunkType> chunk;
+        // if false: re-runs
+        if (chunk_queue_.try_pop(next_chunk)) {
+          std::shared_ptr<ChunkType> chunk;
 
-        if (chunk_cache_.Has(next_chunk)) {
-          chunk_cache_.Fetch(next_chunk, &chunk);
+          if (chunk_cache_.Has(next_chunk)) {
+            chunk_cache_.Fetch(next_chunk, &chunk);
+          } else {
+            chunk = generator_->Generate(next_chunk);
+            chunk_cache_.Put(
+              next_chunk, chunk
+            );
+          } 
         } else {
-          chunk = generator_->Generate(next_chunk);
-          chunk_cache_.Put(
-            next_chunk, chunk
-          );
-        }
-
-        {
-          std::unique_lock<std::mutex> lock(queue_lock_);
-          chunk_queue_.pop();
-          --task_count_;
+          print("pop failed!!");
         }
       }
     }
 
     util::LRUCache<chunker::ChunkIdentifier, std::shared_ptr<ChunkType>>& chunk_cache_;
-    std::shared_ptr<ChunkGenerator> generator_;
-    std::queue<chunker::ChunkIdentifier> chunk_queue_;
 
-    size_t task_count_;
     std::mutex queue_lock_;
+    tbb::concurrent_queue<chunker::ChunkIdentifier>& chunk_queue_;
+    
+    std::shared_ptr<ChunkGenerator> generator_;
+
     std::condition_variable cond_;
     std::condition_variable wait_cond_;
 
