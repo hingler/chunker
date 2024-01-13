@@ -26,6 +26,7 @@ namespace chunker {
       tbb::concurrent_queue<chunker::ChunkIdentifier>& queue
     ) : generator_(generator), chunk_cache_(cache), chunk_queue_(queue), thread_active_(true) {
       thread_ = std::thread(&TypedChunkThread::ThreadFunc, this);
+      running_job_ = false;
     }
 
     TypedChunkThread(const TypedChunkThread& other) = delete;
@@ -36,7 +37,7 @@ namespace chunker {
     void Wait() {
       // how long do we wait for??
       std::unique_lock<std::mutex> lock(queue_lock_);
-      wait_cond_.wait(lock, [&]{ return chunk_queue_.empty() || !thread_active_; });
+      wait_cond_.wait(lock, [&]{ return (chunk_queue_.empty() && !running_job_) || !thread_active_; });
     }
 
     void RefreshThread() {
@@ -74,6 +75,7 @@ namespace chunker {
         }
 
         // if false: re-runs
+        running_job_ = true;
         if (chunk_queue_.try_pop(next_chunk)) {
           std::shared_ptr<ChunkType> chunk;
 
@@ -85,9 +87,13 @@ namespace chunker {
               next_chunk, chunk
             );
           } 
+
         } else {
           print("pop failed!!");
         }
+
+        // true while we're crunching a chunk.
+        running_job_ = false;
       }
     }
 
@@ -102,6 +108,8 @@ namespace chunker {
     std::condition_variable wait_cond_;
 
     bool thread_active_;
+
+    bool running_job_;
     std::thread thread_;
   };
 }

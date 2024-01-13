@@ -38,7 +38,6 @@ namespace chunker {
 
     void Enqueue(const chunker::ChunkIdentifier& identifier) {
       // try to refresh ID in cache
-      print("enqueued chunk at ", identifier.x, ", ", identifier.y);
       chunk_queue.emplace(identifier);
     }
 
@@ -65,6 +64,12 @@ namespace chunker {
 
     typename util::LRUCache<chunker::ChunkIdentifier, std::shared_ptr<ChunkType>>::iterator End() {
       return chunk_cache.end();
+    }
+
+    std::shared_ptr<ChunkType> GetChunk(const chunker::ChunkIdentifier& chunk) {
+      std::shared_ptr<ChunkType> out;
+      bool found = chunk_cache.Fetch(chunk, &out);
+      return out;
     }
 
     TypedChunkThreadPool(const TypedChunkThreadPool& other) = delete;
