@@ -9,6 +9,7 @@
 
 #include "debug/Logger.hpp"
 
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <queue>

@@ -5,9 +5,11 @@
 #include <functional>
 
 #include "chunker/lod/lod_node.hpp"
+#include "chunker/util/Fraction.hpp"
 
 // d'oh!
 #include <glm/glm.hpp>
+#include <glm/gtx/hash.hpp>
 
 namespace chunker {
   struct ChunkNeighbors {
@@ -40,8 +42,20 @@ namespace chunker {
   struct ChunkIdentifier {
     long x;
     long y;
+
+    // start deprecating this
     size_t size;
     size_t chunk_res;
+
+    // vec2 specifying x/y dims
+
+    
+    util::Fraction scale;
+    glm::u64vec2 sample_dims;
+    // tba: swap scale over to double
+    // (add a sample param for it :3 i think only collider and splat are using it)
+    // (concern: pixel perfect :[)
+
     ChunkNeighbors neighbors;
 
     ChunkIdentifier() {
@@ -49,6 +63,10 @@ namespace chunker {
       y = 0;
       size = 0;
       chunk_res = 0;
+
+      scale = 1;
+      sample_dims.x = 0;
+      sample_dims.y = 0;
 
       neighbors.bl = 0;
       neighbors.l = 0;
@@ -94,7 +112,7 @@ namespace chunker {
     // (probably just eight ints specifying the chunk's eight neighbors as these are relevant for generation as well)
 
     bool operator==(const ChunkIdentifier& rhs) const {
-      return (rhs.x == x && rhs.y == y && rhs.size == size && rhs.chunk_res == chunk_res && rhs.neighbors == neighbors);
+      return (rhs.x == x && rhs.y == y && rhs.size == size && rhs.chunk_res == chunk_res && rhs.scale == scale && rhs.sample_dims == sample_dims && rhs.neighbors == neighbors);
     }
   };
 }
@@ -118,9 +136,14 @@ namespace std {
 
   template<>
   struct hash<chunker::ChunkIdentifier> {
-    size_t operator()(const chunker::ChunkIdentifier& identifier) const {
+    std::hash<long> long_hash;
+    std::hash<size_t> size_t_hash;
+    std::hash<glm::u64vec2> vec_hash;
+    std::hash<chunker::util::Fraction> fract_hash;
+    std::hash<chunker::ChunkNeighbors> neighbor_hash;
+    size_t operator()(const chunker::ChunkIdentifier& identifier) const { 
       // this is fine for now i think
-      return (((identifier.x << 24) | identifier.y) * identifier.size ^ identifier.chunk_res) ^ hash<chunker::ChunkNeighbors>{}(identifier.neighbors);
+      return ((long_hash(identifier.x) ^ long_hash(identifier.y) + vec_hash(identifier.sample_dims)) * identifier.size ^ identifier.chunk_res) ^ fract_hash(identifier.scale) ^ neighbor_hash(identifier.neighbors);
     }
   };
 }

@@ -22,14 +22,14 @@ namespace chunker {
   template <
     // splits jobs into chunks, and splits chunks into jobs
     typename GenFactory,
-    typename Generator,
-    typename Chunker,
+    typename Generator = typename GenFactory::gen_type,
+    typename Chunker = typename GenFactory::chunker_type,
     // type which generates chunks
-    typename Chunk = typename Chunker::chunk_type,
+    typename Chunk = typename GenFactory::chunk_type,
     // denotes how tasks are added to the queue
-    typename Job = typename Chunker::job_type,
+    typename Job = typename GenFactory::job_type,
     // type of data returned by mgr
-    typename Result = decltype(std::declval<Chunker&>().Stitch(Job {}, std::vector<std::shared_ptr<Chunk>> {}))
+    typename Result = decltype(std::declval<Chunker&>().Stitch(std::declval<Job&>(), std::vector<std::shared_ptr<Chunk>> {}))
     // could virt this
   >
   class AsyncChunkManager {
@@ -47,9 +47,9 @@ namespace chunker {
     // whatever lol thats fine though
     std::future<Result> Enqueue(const Job& job) {
       PromiseType promise;
-      auto future = promise.get_future();
+      std::future<Result> future = promise.get_future();
       auto pair = std::make_pair(job, std::move(promise));
-      
+
       {
         std::lock_guard<std::mutex> lock(queue_lock_);
         bool queue_empty = job_queue_.empty();
@@ -61,6 +61,10 @@ namespace chunker {
       }
 
       return future;
+    }
+
+    void wait() {
+      pool_.Wait();
     }
 
    private:
@@ -82,7 +86,6 @@ namespace chunker {
       }
 
       pool_.Wake();
-      print("asddsa");
       pool_.Wait();
 
       std::vector<std::shared_ptr<Chunk>> chunks;
