@@ -3,6 +3,8 @@
 
 #include <glm/glm.hpp>
 
+#include "chunker/util/Fraction.hpp"
+
 namespace chunker {
   namespace lod {
     struct lod_node {
@@ -36,6 +38,8 @@ namespace chunker {
        */
       static size_t GetChunkSize(const lod_node* node, size_t tree_res, const glm::vec2& sample_point);
       
+      static util::Fraction GetChunkStep(const lod_node* node, const util::Fraction& step_size, size_t tree_res, const glm::vec2& sample_point);
+
       /**
        * @brief Compares two lod trees for equality
        * 

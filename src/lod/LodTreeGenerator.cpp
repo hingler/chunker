@@ -5,20 +5,48 @@ namespace chunker {
     lod_node* LodTreeGenerator::CreateLodTree(const glm::vec3& local_position) {
       return CreateLodTree(local_position, 0);
     }
-    
+
     lod_node* LodTreeGenerator::CreateLodTree(const glm::vec3& local_position, int force_divide) {
+      return CreateLodTree(local_position, force_divide, size_, chunk_res_, cascade_factor, 0);
+    }
+    
+    // add lod
+    lod_node* LodTreeGenerator::CreateLodTree(const glm::vec3& local_position, int force_divide, int size, int chunk_size, double cascade_factor, int lod_bias) {
+      assert(((size) & (size - 1)) == 0);
+      assert(((chunk_size) & (chunk_size - 1)) == 0);
+      assert(chunk_size > 1);
+      assert(size > 1);
       auto* node = lod_node::lod_node_alloc();
-      int size = size_;
       double cascade_real = cascade_factor / CASCADE_MUL_FACTOR;
-      while (size > chunk_res_) {
+
+      // handle lod bias
+      // -> scale down chunk size
+
+      // arb
+      int eff_lod_bias = std::clamp(lod_bias, -3, 3);
+      int eff_chunk_size = chunk_size;
+      while (eff_lod_bias < 0) {
+        eff_chunk_size *= 2;
+        eff_lod_bias++;
+      }
+
+      while (eff_lod_bias > 0 && eff_chunk_size > 1) {
+        eff_chunk_size /= 2;
+        eff_lod_bias--;
+      }
+
+      // scale up cascade
+      size_t cascade_mul = size;
+      while (cascade_mul > chunk_size) {
         cascade_real *= CASCADE_MUL_FACTOR;
-        size >>= 1;
+        cascade_mul >>= 1;
       }
 
       CreateLodTree_recurse(
         0,
         0,
-        size_,
+        size,
+        eff_chunk_size,
         cascade_real,
         local_position,
         node,
@@ -32,13 +60,14 @@ namespace chunker {
       int x, 
       int y,
       int node_size,
+      int chunk_size,
       double cascade_threshold,
       const glm::vec3& local_position,
       lod_node* root,
       int force_divide) 
     {
       // no longer descend
-      if (node_size <= chunk_res_) {
+      if (node_size <= chunk_size) {
         return;
       }
 
@@ -69,10 +98,10 @@ namespace chunker {
       double new_cascade_threshold = cascade_threshold / CASCADE_MUL_FACTOR;
       int new_node_size = node_size / 2;
 
-      CreateLodTree_recurse(x,                 y,                 new_node_size, new_cascade_threshold, local_position, root->bl, force_divide - 1);
-      CreateLodTree_recurse(x + new_node_size, y,                 new_node_size, new_cascade_threshold, local_position, root->br, force_divide - 1);
-      CreateLodTree_recurse(x,                 y + new_node_size, new_node_size, new_cascade_threshold, local_position, root->tl, force_divide - 1);
-      CreateLodTree_recurse(x + new_node_size, y + new_node_size, new_node_size, new_cascade_threshold, local_position, root->tr, force_divide - 1);
+      CreateLodTree_recurse(x,                 y,                 new_node_size, chunk_size, new_cascade_threshold, local_position, root->bl, force_divide - 1);
+      CreateLodTree_recurse(x + new_node_size, y,                 new_node_size, chunk_size, new_cascade_threshold, local_position, root->br, force_divide - 1);
+      CreateLodTree_recurse(x,                 y + new_node_size, new_node_size, chunk_size, new_cascade_threshold, local_position, root->tl, force_divide - 1);
+      CreateLodTree_recurse(x + new_node_size, y + new_node_size, new_node_size, chunk_size, new_cascade_threshold, local_position, root->tr, force_divide - 1);
     }
   }
 }

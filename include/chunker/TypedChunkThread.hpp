@@ -24,8 +24,9 @@ namespace chunker {
     TypedChunkThread(
       std::shared_ptr<ChunkGenerator> generator,
       util::LRUCache<chunker::ChunkIdentifier, std::shared_ptr<ChunkType>>& cache,
-      tbb::concurrent_queue<chunker::ChunkIdentifier>& queue
-    ) : generator_(generator), chunk_cache_(cache), chunk_queue_(queue), thread_active_(true) {
+      tbb::concurrent_queue<chunker::ChunkIdentifier>& queue,
+      size_t thread_id
+    ) : generator_(generator), chunk_cache_(cache), chunk_queue_(queue), thread_active_(true), thread_id_(thread_id) {
       thread_ = std::thread(&TypedChunkThread::ThreadFunc, this);
       running_job_ = false;
     }
@@ -35,17 +36,26 @@ namespace chunker {
     TypedChunkThread operator=(const TypedChunkThread& other) = delete;
     TypedChunkThread operator=(TypedChunkThread&& other) = delete;
 
+
     void Wait() {
-      // how long do we wait for??
       std::unique_lock<std::mutex> lock(queue_lock_);
-      wait_cond_.wait(lock, [&]{ return (chunk_queue_.empty() && !running_job_) || !thread_active_; });
+      // notify cond - remove predicate so that it will wake when notified
+      // *always* try to pull once, then sleep again
+      cond_.notify_all();
+      wait_cond_.wait(lock, [&]{ return PredicateCondition(); });
+    }
+
+    bool PredicateCondition() {
+      return (chunk_queue_.empty() && !running_job_) || !thread_active_;
     }
 
     void RefreshThread() {
       cond_.notify_all();
+      wait_cond_.notify_all();
     }
 
     ~TypedChunkThread() {
+      // threads arent cleaning up very nicely
       thread_active_ = false;
       cond_.notify_all();
       thread_.join();
@@ -64,12 +74,13 @@ namespace chunker {
       while (true) {
         {
           std::unique_lock<std::mutex> lock(queue_lock_);
+          // we acquire this lock - the queue isn't empty. we run a loop.
           if (chunk_queue_.empty()) {
             // notify waiters that thread is done
             wait_cond_.notify_all();
+            cond_.wait(lock);
           }
 
-          cond_.wait(lock, [&] { return !chunk_queue_.empty() || !thread_active_; });
           if (!thread_active_) {
             return;
           }
@@ -89,8 +100,6 @@ namespace chunker {
             );
           } 
 
-        } else {
-          print("pop failed!!");
         }
 
         // true while we're crunching a chunk.
@@ -105,13 +114,18 @@ namespace chunker {
     
     std::shared_ptr<ChunkGenerator> generator_;
 
+    // condition variable indicating work to be done
     std::condition_variable cond_;
+
+    // condition variable notified when task complete
     std::condition_variable wait_cond_;
 
     bool thread_active_;
 
     bool running_job_;
     std::thread thread_;
+
+    size_t thread_id_;
   };
 }
 

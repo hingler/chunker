@@ -27,7 +27,8 @@ namespace chunker {
         thread_list[i] = new TypedChunkThread<ChunkGenerator, ChunkType>(
           factory->Create(),
           chunk_cache,
-          chunk_queue
+          chunk_queue,
+          i
         );
       }
     }

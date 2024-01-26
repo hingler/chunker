@@ -19,18 +19,13 @@ namespace chunker {
       LodTreeGenerator(int size, int chunk_res)
        : size_(size),
          chunk_res_(chunk_res)
-      {
-        // PoT + 1
-        assert(((size) & (size - 1)) == 0);
-        assert(((chunk_res) & (chunk_res - 1)) == 0);
-        assert(chunk_res_ > 1);
-        assert(size_ > 1);
-      }
+      {}
 
 
 
       lod_node* CreateLodTree(const glm::vec3& local_position);
       lod_node* CreateLodTree(const glm::vec3& local_position, int force_divide);
+      lod_node* CreateLodTree(const glm::vec3& local_position, int force_divide, int size, int chunk_size, double cascade_factor, int lod_bias);
 
       // distance cap for min subdivision level
       // other cascades are handled internally
@@ -40,7 +35,7 @@ namespace chunker {
     private:
       const int size_;
       const int chunk_res_;
-      void CreateLodTree_recurse(int x, int y, int node_size, double cascade_threshold, const glm::vec3& local_position, lod_node* root, int force_divide);
+      void CreateLodTree_recurse(int x, int y, int node_size, int chunk_res, double cascade_threshold, const glm::vec3& local_position, lod_node* root, int force_divide);
     };
   }
 }

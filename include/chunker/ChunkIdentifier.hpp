@@ -7,6 +7,8 @@
 #include "chunker/lod/lod_node.hpp"
 #include "chunker/util/Fraction.hpp"
 
+#include "debug/Logger.hpp"
+
 // d'oh!
 #include <glm/glm.hpp>
 #include <glm/gtx/hash.hpp>
@@ -14,16 +16,16 @@
 namespace chunker {
   struct ChunkNeighbors {
     // edges
-    size_t l;
-    size_t r;
-    size_t u;
-    size_t d;
+    util::Fraction l;
+    util::Fraction r;
+    util::Fraction u;
+    util::Fraction d;
 
     // corners
-    size_t tl;
-    size_t tr;
-    size_t bl;
-    size_t br;
+    util::Fraction tl;
+    util::Fraction tr;
+    util::Fraction bl;
+    util::Fraction br;
 
     bool operator==(const ChunkNeighbors& rhs) const {
       return (
@@ -80,6 +82,41 @@ namespace chunker {
 
     // dont like that this is locked to pot - eventually might want to break out of that
     
+    ChunkIdentifier(const glm::i64vec2& global_offset, const glm::ivec2& tree_offset, size_t chunk_res, const chunker::util::Fraction& scale, size_t tree_res, const lod::lod_node* tree) {
+      // idea: should be able to offset in generation by a simple amount (tba)
+
+      // global offset can be totally arbitrary
+      this->x = global_offset.x;
+      this->y =  global_offset.y;
+      this->scale = scale;
+      this->sample_dims = glm::ivec2(chunk_res);
+
+      size_t chunk_size = static_cast<size_t>(scale * chunk_res);
+      util::Fraction base_scale(tree_res, chunk_res);
+
+      // lod calculations
+      glm::vec2 near_corner = glm::vec2(tree_offset.x - 0.5f, tree_offset.y - 0.5f);
+      glm::vec2 far_corner = glm::vec2(tree_offset.x + chunk_size + 0.5f, tree_offset.y + chunk_size + 0.5f);
+
+      float half_size = static_cast<float>(chunk_size / 2);
+
+      // take eight lod samples
+      // figured it out - offset and tree no longer match!
+
+      // print these out next
+      // want to get consistent generatioN!!!
+      // (the issue is specifically corner cases, and how this neighbor table is gen'd)
+      neighbors.bl = std::max(lod::lod_node::GetChunkStep(tree, base_scale, tree_res, near_corner)                           , scale);
+      neighbors.tr = std::max(lod::lod_node::GetChunkStep(tree, base_scale, tree_res, far_corner)                            , scale);
+      neighbors.tl = std::max(lod::lod_node::GetChunkStep(tree, base_scale, tree_res, glm::vec2(near_corner.x, far_corner.y)), scale);
+      neighbors.br = std::max(lod::lod_node::GetChunkStep(tree, base_scale, tree_res, glm::vec2(far_corner.x, near_corner.y)), scale);
+      neighbors.l = std::max(lod::lod_node::GetChunkStep(tree, base_scale, tree_res, near_corner + glm::vec2(0.0, half_size)), scale);
+      neighbors.r = std::max(lod::lod_node::GetChunkStep(tree, base_scale, tree_res, far_corner - glm::vec2(0.0, half_size)) , scale);
+      neighbors.u = std::max(lod::lod_node::GetChunkStep(tree, base_scale, tree_res, far_corner - glm::vec2(half_size, 0.0)) , scale);
+      neighbors.d = std::max(lod::lod_node::GetChunkStep(tree, base_scale, tree_res, near_corner + glm::vec2(half_size, 0.0)), scale);
+    }
+
+    // deprecate :3
     ChunkIdentifier(long x, long y, long tree_x, long tree_y, size_t chunk_size, size_t chunk_res, size_t tree_res, const lod::lod_node* tree) {
       this->x = x;
       this->y = y;
@@ -120,16 +157,17 @@ namespace chunker {
 namespace std {
   template<>
   struct hash<chunker::ChunkNeighbors> {
+    hash<chunker::util::Fraction> fract_hash;
     size_t operator()(const chunker::ChunkNeighbors& n) const {
       return (
-        n.l
-        ^ n.r
-        ^ n.u
-        ^ n.d
-        ^ n.tl
-        ^ n.tr
-        ^ n.bl
-        ^ n.br
+        fract_hash(n.l)
+        ^ fract_hash(n.r)
+        ^ fract_hash(n.u)
+        ^ fract_hash(n.d)
+        ^ fract_hash(n.tl)
+        ^ fract_hash(n.tr)
+        ^ fract_hash(n.bl)
+        ^ fract_hash(n.br)
       );
     }
   };
