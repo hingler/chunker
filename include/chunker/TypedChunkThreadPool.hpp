@@ -60,6 +60,8 @@ namespace chunker {
     }
 
     typename util::LRUCache<chunker::ChunkIdentifier, std::shared_ptr<ChunkType>>::iterator BoundedIterator(size_t chunk_count) {
+
+      // not thread safe - any scenario in which we'd read this while the chunk is active??
       return chunk_cache.begin_bounded(chunk_count);
     }
 
@@ -89,6 +91,9 @@ namespace chunker {
     private:
     size_t threads;
     // with this approach: threads need to pull work from a common queue st work isn't over-shared
+    // how can we re-implement inactive threads?
+    // - call some func on a wait cond telling them to sleep (FOREVER)
+    // - once re-activated: re-awaken :3
 
     size_t active_threads;
     TypedChunkThread<ChunkGenerator, ChunkType>** thread_list;

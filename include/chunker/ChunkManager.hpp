@@ -203,7 +203,9 @@ namespace chunker {
     long tree_size_;
     size_t min_chunk_size_;
     double cascade_factor_;
-    chunker::lod::lod_node* last_tree_;
+
+    // mem leak here lole
+    chunker::lod::lod_node* last_tree_ = nullptr;
     chunker::lod::LodTreeGenerator tree_gen_;
     chunker::TypedChunkThreadPool<ChunkGenFactory, ChunkGenerator, ChunkType> thread_pool_;
 

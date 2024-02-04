@@ -77,6 +77,14 @@ namespace chunker {
           // we acquire this lock - the queue isn't empty. we run a loop.
           if (chunk_queue_.empty()) {
             // notify waiters that thread is done
+
+            print("waiting...");
+            // def a few instabilities in the thread functionality
+            // - keep moving, but hunt for them as they appear
+
+            // (was: thread chunk + 444 before, consistently. no  idea what that corresponds to, tragically)
+
+            // alt1: add some 
             wait_cond_.notify_all();
             cond_.wait(lock);
           }
@@ -86,14 +94,18 @@ namespace chunker {
           }
         }
 
+        // something in this thread func is causing a crash
+        // most likely: the chunk cache lol
+
         // if false: re-runs
         running_job_ = true;
         if (chunk_queue_.try_pop(next_chunk)) {
           std::shared_ptr<ChunkType> chunk;
+          if (!chunk_cache_.Fetch(next_chunk, &chunk)) {
+            // not cached
 
-          if (chunk_cache_.Has(next_chunk)) {
-            chunk_cache_.Fetch(next_chunk, &chunk);
-          } else {
+            // i would assume the crash is appearing here... but there's nothing to confirm that
+            // print("generating...");
             chunk = generator_->Generate(next_chunk);
             chunk_cache_.Put(
               next_chunk, chunk

@@ -85,6 +85,8 @@ namespace chunker {
         pool_.Enqueue(id);
       }
 
+      print("enqueued all items");
+
       pool_.Wake();
       pool_.Wait();
 
@@ -102,6 +104,7 @@ namespace chunker {
         job_queue_.pop();
         if (!job_queue_.empty()) {
           // while loop? iddk later lol
+          print("starting thread... (trying to catch the malloc)");
           this->start_thread();
         }
       }
