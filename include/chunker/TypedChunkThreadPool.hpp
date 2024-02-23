@@ -5,7 +5,9 @@
 #include "chunker/ChunkIdentifier.hpp"
 #include "chunker/TypedChunkThread.hpp"
 
-#include "debug/Logger.hpp"
+#include "gog43/Logger.hpp"
+
+// tba: chunker needs its own gog copy jej
 
 #include <tbb/concurrent_queue.h>
 

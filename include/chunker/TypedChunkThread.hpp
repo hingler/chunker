@@ -7,7 +7,7 @@
 #include <tbb/concurrent_queue.h>
 
 
-#include "debug/Logger.hpp"
+#include "gog43/Logger.hpp"
 
 #include <condition_variable>
 #include <memory>
@@ -78,7 +78,6 @@ namespace chunker {
           if (chunk_queue_.empty()) {
             // notify waiters that thread is done
 
-            print("waiting...");
             // def a few instabilities in the thread functionality
             // - keep moving, but hunt for them as they appear
 

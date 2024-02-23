@@ -7,7 +7,7 @@
 #include "chunker/lod/lod_node.hpp"
 #include "chunker/util/Fraction.hpp"
 
-#include "debug/Logger.hpp"
+#include "gog43/Logger.hpp"
 
 // d'oh!
 #include <glm/glm.hpp>

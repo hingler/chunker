@@ -12,7 +12,7 @@
 
 #include "chunker/traits/chunker_type.hpp"
 
-#include "debug/Logger.hpp"
+#include "gog43/Logger.hpp"
 
 #include <type_traits>
 
@@ -85,8 +85,6 @@ namespace chunker {
         pool_.Enqueue(id);
       }
 
-      print("enqueued all items");
-
       pool_.Wake();
       pool_.Wait();
 
@@ -104,7 +102,6 @@ namespace chunker {
         job_queue_.pop();
         if (!job_queue_.empty()) {
           // while loop? iddk later lol
-          print("starting thread... (trying to catch the malloc)");
           this->start_thread();
         }
       }
