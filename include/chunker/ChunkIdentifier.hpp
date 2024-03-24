@@ -51,7 +51,7 @@ namespace chunker {
 
     // vec2 specifying x/y dims
 
-    
+
     util::Fraction scale;
     glm::u64vec2 sample_dims;
     // tba: swap scale over to double
@@ -81,7 +81,7 @@ namespace chunker {
     }
 
     // dont like that this is locked to pot - eventually might want to break out of that
-    
+
     ChunkIdentifier(const glm::i64vec2& global_offset, const glm::ivec2& tree_offset, size_t chunk_res, const chunker::util::Fraction& scale, size_t tree_res, const lod::lod_node* tree) {
       // idea: should be able to offset in generation by a simple amount (tba)
 
@@ -98,7 +98,7 @@ namespace chunker {
       glm::vec2 near_corner = glm::vec2(tree_offset.x - 0.5f, tree_offset.y - 0.5f);
       glm::vec2 far_corner = glm::vec2(tree_offset.x + chunk_size + 0.5f, tree_offset.y + chunk_size + 0.5f);
 
-      float half_size = static_cast<float>(chunk_size / 2);
+      float half_size = static_cast<float>(chunk_size / 2.0f);
 
       // take eight lod samples
       // figured it out - offset and tree no longer match!
@@ -179,7 +179,7 @@ namespace std {
     std::hash<glm::u64vec2> vec_hash;
     std::hash<chunker::util::Fraction> fract_hash;
     std::hash<chunker::ChunkNeighbors> neighbor_hash;
-    size_t operator()(const chunker::ChunkIdentifier& identifier) const { 
+    size_t operator()(const chunker::ChunkIdentifier& identifier) const {
       // this is fine for now i think
       return ((long_hash(identifier.x) ^ long_hash(identifier.y) + vec_hash(identifier.sample_dims)) * identifier.size ^ identifier.chunk_res) ^ fract_hash(identifier.scale) ^ neighbor_hash(identifier.neighbors);
     }
