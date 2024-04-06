@@ -25,7 +25,7 @@ namespace chunker {
 
     /**
      * @brief LRU cache impl - thread safe on calls not returning iterator impl.
-     * 
+     *
      * @tparam KeyType - type for key
      * @tparam ValueType - type for value
      */
@@ -33,7 +33,7 @@ namespace chunker {
     class LRUCache {
     public:
       typedef impl::LRUCacheIterator<KeyType, ValueType> iterator;
-      
+
       LRUCache(int capacity) : capacity_(capacity) {}
       bool Fetch(const KeyType& key, ValueType* output) {
         std::lock_guard lock(cache_mutex);
@@ -65,8 +65,8 @@ namespace chunker {
 
       /**
        * @brief ensure cache has capacity for specified items
-       * 
-       * @param new_capacity 
+       *
+       * @param new_capacity
        */
       void Reserve(int new_capacity) {
         std::lock_guard lock(cache_mutex);
@@ -78,6 +78,11 @@ namespace chunker {
       int Capacity() {
         std::lock_guard lock(cache_mutex);
         return capacity_;
+      }
+
+      int Size() {
+        std::lock_guard lock(cache_mutex);
+        return key_cache.Size();
       }
 
       // put, ignore result
@@ -97,18 +102,25 @@ namespace chunker {
             *output = itr->second;
           }
           res = OVERWRITE;
-        } else if (key_cache.Size() > capacity_) {
-          KeyType key_last; 
+        } else {
+          // will thjis work hehe
+          while (key_cache.Size() > capacity_) {
+            KeyType key_last;
 
-          // might want to clean this up later
-          // whatever :3
-          bool key_available = key_cache.PopBack(&key_last);
-          assert(key_available);
-          assert(value_cache.find(key_last) != value_cache.end());
-          if (output != nullptr) {
-            *output = value_cache.at(key_last);
+            // might want to clean this up later
+            // whatever :3
+            bool key_available = key_cache.PopBack(&key_last);
+            auto itr = value_cache.find(key_last);
+            assert(key_available);
+            assert(itr != value_cache.end());
+            if (output != nullptr) {
+              *output = value_cache.at(key_last);
+            }
+
+            // oops!
+            value_cache.erase(itr);
+            res = REMOVE_LAST;
           }
-          res = REMOVE_LAST;
         }
 
         value_cache.insert_or_assign(key, value);
@@ -117,8 +129,8 @@ namespace chunker {
 
       /**
        * @brief Creates an iterator at start of cache. NOT THREAD SAFE.
-       * 
-       * @return impl::LRUCacheIterator<KeyType, ValueType> 
+       *
+       * @return impl::LRUCacheIterator<KeyType, ValueType>
        */
       impl::LRUCacheIterator<KeyType, ValueType> begin() {
         return impl::LRUCacheIterator<KeyType, ValueType>(key_cache.begin(), &value_cache);
@@ -126,8 +138,8 @@ namespace chunker {
 
       /**
        * @brief Creates an iterator at emd of cache. NOT THREAD SAFE.
-       * 
-       * @return impl::LRUCacheIterator<KeyType, ValueType> 
+       *
+       * @return impl::LRUCacheIterator<KeyType, ValueType>
        */
       impl::LRUCacheIterator<KeyType, ValueType> end() {
         return impl::LRUCacheIterator<KeyType, ValueType>();
@@ -136,8 +148,8 @@ namespace chunker {
 
       /**
        * @brief Creates an iterator at begin of cache, which is bounded by a pre-specified length. NOT THREAD SAFE.
-       * 
-       * @return impl::LRUCacheIterator<KeyType, ValueType> 
+       *
+       * @return impl::LRUCacheIterator<KeyType, ValueType>
        */
       impl::LRUCacheIterator<KeyType, ValueType> begin_bounded(int max_length) {
         return impl::LRUCacheIterator<KeyType, ValueType>(key_cache.begin(), &value_cache, max_length);
@@ -148,7 +160,7 @@ namespace chunker {
       std::unordered_map<KeyType, ValueType> value_cache;
       int capacity_;
       std::recursive_mutex cache_mutex;
-    };     
+    };
   }
 }
 

@@ -12,14 +12,13 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
-#include <queue>
+
 #include <thread>
 
 namespace chunker {
   template <typename ChunkGenerator, typename ChunkType>
   class TypedChunkThread {
     static_assert(chunker::traits::chunk_gen_type<ChunkGenerator, ChunkType>::value);
-
     public:
     TypedChunkThread(
       std::shared_ptr<ChunkGenerator> generator,
@@ -30,6 +29,22 @@ namespace chunker {
       thread_ = std::thread(&TypedChunkThread::ThreadFunc, this);
       running_job_ = false;
     }
+
+    // idea for threading:
+    // - use a semaphore to govern shared resources
+    // - when a thread has a chance to "check" a job, ping a semaphore
+    // - if the job is avail, then grab it
+    // - otherwise, spin
+    // - ideally: prio system (collision is paramount - then prob splats, then terrain, then particles)
+    // - use prio queue to determine who gets to acquire next
+    //
+    // idea:
+    // - semaphore + prio queue
+    // - if > 0: acquire instantly from prio queue
+    // - prio queue elem contains:
+    //   - value ind'g priority
+    //   - sync method to tell thread to sleep (cond var, atm'c flag?)
+    //   - should be low/0 footprint if possible
 
     TypedChunkThread(const TypedChunkThread& other) = delete;
     TypedChunkThread(TypedChunkThread&& other) = delete;
@@ -83,7 +98,7 @@ namespace chunker {
 
             // (was: thread chunk + 444 before, consistently. no  idea what that corresponds to, tragically)
 
-            // alt1: add some 
+            // alt1: add some
             wait_cond_.notify_all();
             cond_.wait(lock);
           }
@@ -99,17 +114,20 @@ namespace chunker {
         // if false: re-runs
         running_job_ = true;
         if (chunk_queue_.try_pop(next_chunk)) {
+          //
           std::shared_ptr<ChunkType> chunk;
           if (!chunk_cache_.Fetch(next_chunk, &chunk)) {
             // not cached
 
             // i would assume the crash is appearing here... but there's nothing to confirm that
-            // print("generating...");
+            // v wrong? (double wrap??)
+            // expects result to be shared ptr
+            // - which makes sense, because we need to ensure we can share it :/
             chunk = generator_->Generate(next_chunk);
             chunk_cache_.Put(
               next_chunk, chunk
             );
-          } 
+          }
 
         }
 
@@ -122,7 +140,7 @@ namespace chunker {
 
     std::mutex queue_lock_;
     tbb::concurrent_queue<chunker::ChunkIdentifier>& chunk_queue_;
-    
+
     std::shared_ptr<ChunkGenerator> generator_;
 
     // condition variable indicating work to be done

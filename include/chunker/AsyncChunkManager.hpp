@@ -7,14 +7,13 @@
 #include <queue>
 #include <thread>
 #include <utility>
+#include <unordered_set>
 
 #include "chunker/TypedChunkThreadPool.hpp"
 
 #include "chunker/traits/chunker_type.hpp"
 
 #include "gog43/Logger.hpp"
-
-#include <type_traits>
 
 // any way to infer these?
 namespace chunker {
@@ -33,7 +32,7 @@ namespace chunker {
     // could virt this
   >
   class AsyncChunkManager {
-    typedef std::promise<Result> PromiseType;
+    typedef std::promise<std::optional<Result>> PromiseType;
     static_assert(traits::chunker_type<Chunker, Chunk, Job, Result>::value);
     static_assert(traits::stitcher_type<Chunker, Chunk, Job, Result>::value);
    public:
@@ -41,22 +40,50 @@ namespace chunker {
       Chunker chunker,
       std::shared_ptr<GenFactory> factory,
       size_t max_threads
-    ) : chunker_(chunker), factory_(factory), pool_(max_threads, factory_) {}
+    ) : thread_running_(false), chunker_(chunker), factory_(factory), pool_(max_threads, factory_), last_job_() {}
     // result type needs to be shared if this is the case
     // note: we still need to wrap this with some sort of "job queueing" or "job wrapping" system
     // whatever lol thats fine though
-    std::future<Result> Enqueue(const Job& job) {
+    std::future<std::optional<Result>> Enqueue(const Job& job, bool erase_queue = false) {
       PromiseType promise;
-      std::future<Result> future = promise.get_future();
+      std::future<std::optional<Result>> future = promise.get_future();
       auto pair = std::make_pair(job, std::move(promise));
 
       {
+        // possible deadlock
         std::lock_guard<std::mutex> lock(queue_lock_);
+
         bool queue_empty = job_queue_.empty();
 
+        if (erase_queue) {
+          // flush out awaiting tasks - new job takes priority
+          while (!job_queue_.empty()) {
+            job_queue_.pop();
+          }
+
+          // up next:
+          // - work on tuning lod for performance
+
+          // tba:
+          // - tune grass appearance
+          // - write shaders for it :)
+
+          gog43::print("popped all prev jobs from queue!");
+        }
+
+        // something wrong with this behavior :/
+
         job_queue_.push(std::move(pair));
-        if (queue_empty) {
-          start_thread();
+
+        {
+          // grab order: queue lock, then async lock
+          // (ie: only grab async lock if we already have queue lock)
+          std::lock_guard<std::mutex> async_lock(async_lock_);
+          if (!thread_running_.test_and_set()) {
+            // thread wasn't running - start it
+            start_thread();
+          }
+
         }
       }
 
@@ -67,6 +94,15 @@ namespace chunker {
       pool_.Wait();
     }
 
+    /**
+      @returns number of tasks waiting to complete :):)
+    */
+    bool empty() {
+      std::lock_guard<std::mutex> lock(queue_lock_);
+      // async thread not running (last job completed) and queue is empty
+      return (job_queue_.size() <= 0) && (!thread_running_.test());
+    }
+
    private:
     typedef std::pair<Job, PromiseType> pair_type;
     typedef std::pair<ChunkIdentifier, Chunk> chunk_data_type;
@@ -75,11 +111,51 @@ namespace chunker {
       std::thread { &AsyncChunkManager::async_func, this }.detach();
     }
     void async_func() {
-      std::unique_lock<std::mutex> lock(queue_lock_);
-      pair_type& item = job_queue_.front();
-      lock.unlock();
+      pair_type item;
+      {
+        std::unique_lock<std::mutex> lock(queue_lock_);
+        // take ownership of this element, then pop
+        if (job_queue_.empty()) {
+          // could have been cleared - return
+          std::lock_guard<std::mutex> async_lock(async_lock_);
+          thread_running_.clear();
+          return;
+        }
 
+        item = std::move(job_queue_.front());
+        // pop here
+        job_queue_.pop();
+      }
+
+      bool distinct = true;
       std::vector<ChunkIdentifier> ids = chunker_.Chunk(item.first);
+      if (ids.size() == last_job_.size()) {
+        distinct = false;
+        for (const auto& c : ids) {
+          if (last_job_.find(c) == last_job_.end()) {
+            distinct = true;
+            break;
+          }
+        }
+      }
+
+      if (!distinct) {
+        // last job matches current - bail
+        std::lock_guard<std::mutex> async_lock(async_lock_);
+        item.second.set_value(std::optional<Result>());
+        thread_running_.clear();
+
+        return;
+      }
+
+      last_job_.clear();
+      // this insertion is the issue - not sure why
+      for (const auto& c : ids) {
+        last_job_.insert(c);
+      }
+
+      // go w a relatively low number - just pad out to max ig
+      pool_.Reserve(ids.size() + 1);
 
       for (auto id : ids) {
         pool_.Enqueue(id);
@@ -88,6 +164,8 @@ namespace chunker {
       pool_.Wake();
       pool_.Wait();
 
+      // detachjes once at a time hehe nvm
+
       std::vector<std::shared_ptr<Chunk>> chunks;
       for (auto id : ids) {
         // contiguous? should be
@@ -95,20 +173,27 @@ namespace chunker {
       }
 
       Result r = chunker_.Stitch(item.first, chunks);
-      item.second.set_value(r);
+      item.second.set_value(std::optional(r));
+
+      gog43::print("POOL: Cache size: ", pool_.CacheSize());
 
       {
         std::lock_guard<std::mutex> lock(queue_lock_);
-        job_queue_.pop();
         if (!job_queue_.empty()) {
-          // while loop? iddk later lol
           this->start_thread();
+        } else {
+          std::lock_guard<std::mutex> async_lock(async_lock_);
+          thread_running_.clear();
         }
       }
     }
 
     mutable std::mutex queue_lock_;
+    mutable std::mutex async_lock_;
+    mutable std::atomic_flag thread_running_;
     std::queue<std::pair<Job, PromiseType>> job_queue_;
+
+    mutable std::unordered_set<ChunkIdentifier> last_job_;
 
     Chunker chunker_;
     std::shared_ptr<GenFactory> factory_;

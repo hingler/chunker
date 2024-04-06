@@ -21,7 +21,8 @@ namespace chunker {
     TypedChunkThreadPool(
       size_t max_threads,
       std::shared_ptr<ChunkGenFactory> factory
-    ) : chunk_cache(1024), chunk_queue() {
+    ) : chunk_cache(64), chunk_queue() {
+      // def a bug in chunk cache (idk what)
       this->threads = max_threads;
       this->thread_list = new TypedChunkThread<ChunkGenerator, ChunkType>*[threads];
       for (int i = 0; i < threads; i++) {
@@ -42,6 +43,10 @@ namespace chunker {
     void Enqueue(const chunker::ChunkIdentifier& identifier) {
       // try to refresh ID in cache
       chunk_queue.emplace(identifier);
+    }
+
+    size_t CacheSize() {
+      return chunk_cache.Size();
     }
 
     void Wake() {

@@ -52,11 +52,12 @@ namespace chunker {
     // vec2 specifying x/y dims
 
 
+    // (would like this if we could get a double here - for now: just use fraction?)
+    // (idea was to ensure replicability - not sure what else we want)
+    // (also: changing the identifier could muck things up in caching)
+    // (keep using fraction for now :3 - we'll provide something precise ig)
     util::Fraction scale;
     glm::u64vec2 sample_dims;
-    // tba: swap scale over to double
-    // (add a sample param for it :3 i think only collider and splat are using it)
-    // (concern: pixel perfect :[)
 
     ChunkNeighbors neighbors;
 
@@ -143,6 +144,15 @@ namespace chunker {
 
     size_t GetStepSize() const {
       return (size / chunk_res);
+    }
+
+    double Dist(const glm::dvec2& sample_pos) {
+      glm::dvec2 closest_point(
+        glm::clamp(sample_pos.x, static_cast<double>(x), static_cast<double>(x + static_cast<long>(sample_dims.x))),
+        glm::clamp(sample_pos.y, static_cast<double>(y), static_cast<double>(y + static_cast<long>(sample_dims.y)))
+      );
+
+      return glm::length(sample_pos - closest_point);
     }
 
     // tba: need specifiers for chunk edges
