@@ -41,6 +41,13 @@ namespace chunker {
       std::shared_ptr<GenFactory> factory,
       size_t max_threads
     ) : thread_running_(false), chunker_(chunker), factory_(factory), pool_(max_threads, factory_), last_job_() {}
+
+    AsyncChunkManager(
+      Chunker chunker,
+      std::shared_ptr<GenFactory> factory,
+      std::shared_ptr<ThreadQueue> queue,
+      size_t priority = 0
+    ) : thread_running_(false), chunker_(chunker), factory_(factory), pool_(queue, factory, priority), last_job_() {}
     // result type needs to be shared if this is the case
     // note: we still need to wrap this with some sort of "job queueing" or "job wrapping" system
     // whatever lol thats fine though
@@ -174,8 +181,6 @@ namespace chunker {
 
       Result r = chunker_.Stitch(item.first, chunks);
       item.second.set_value(std::optional(r));
-
-      gog43::print("POOL: Cache size: ", pool_.CacheSize());
 
       {
         std::lock_guard<std::mutex> lock(queue_lock_);

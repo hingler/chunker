@@ -9,7 +9,9 @@ env.Append(CPPPATH=[
 # possible double include??
 sources = [
   "src/lod/lod_node.cpp",
-  "src/lod/LodTreeGenerator.cpp"
+  "src/lod/LodTreeGenerator.cpp",
+  "src/thread/impl/ThreadHandleImpl.cpp",
+  "src/thread/impl/ThreadQueueImpl.cpp"
 ]
 
 library = env.Library("build/chunker", source=sources)

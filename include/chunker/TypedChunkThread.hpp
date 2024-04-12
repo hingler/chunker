@@ -2,6 +2,7 @@
 #define TYPED_CHUNK_THREAD_H_
 
 #include "chunker/ChunkIdentifier.hpp"
+#include "chunker/thread/ThreadQueue.hpp"
 #include "chunker/traits/chunk_gen_type.hpp"
 
 #include <tbb/concurrent_queue.h>
@@ -24,8 +25,10 @@ namespace chunker {
       std::shared_ptr<ChunkGenerator> generator,
       util::LRUCache<chunker::ChunkIdentifier, std::shared_ptr<ChunkType>>& cache,
       tbb::concurrent_queue<chunker::ChunkIdentifier>& queue,
+      const std::shared_ptr<ThreadQueue>& thread_queue,
+      size_t priority,
       size_t thread_id
-    ) : generator_(generator), chunk_cache_(cache), chunk_queue_(queue), thread_active_(true), thread_id_(thread_id) {
+    ) : generator_(generator), chunk_cache_(cache), chunk_queue_(queue), thread_active_(true), thread_queue(thread_queue), thread_id_(thread_id), priority_(priority) {
       thread_ = std::thread(&TypedChunkThread::ThreadFunc, this);
       running_job_ = false;
     }
@@ -113,16 +116,23 @@ namespace chunker {
 
         // if false: re-runs
         running_job_ = true;
+
+        // acquire job
+
         if (chunk_queue_.try_pop(next_chunk)) {
-          //
+
+
           std::shared_ptr<ChunkType> chunk;
           if (!chunk_cache_.Fetch(next_chunk, &chunk)) {
             // not cached
 
-            // i would assume the crash is appearing here... but there's nothing to confirm that
-            // v wrong? (double wrap??)
-            // expects result to be shared ptr
-            // - which makes sense, because we need to ensure we can share it :/
+            // acquire only before generating (heavier work)
+            std::shared_ptr<ThreadHandle> result(nullptr);
+
+            while (result == nullptr) {
+              result = thread_queue->AcquireBlocking(priority_);
+            }
+
             chunk = generator_->Generate(next_chunk);
             chunk_cache_.Put(
               next_chunk, chunk
@@ -141,6 +151,8 @@ namespace chunker {
     std::mutex queue_lock_;
     tbb::concurrent_queue<chunker::ChunkIdentifier>& chunk_queue_;
 
+    std::shared_ptr<ThreadQueue> thread_queue;
+
     std::shared_ptr<ChunkGenerator> generator_;
 
     // condition variable indicating work to be done
@@ -155,6 +167,8 @@ namespace chunker {
     std::thread thread_;
 
     size_t thread_id_;
+
+    const size_t priority_;
   };
 }
 

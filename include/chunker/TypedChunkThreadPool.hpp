@@ -1,6 +1,8 @@
 #ifndef TYPED_CHUNK_THREAD_POOL_H_
 #define TYPED_CHUNK_THREAD_POOL_H_
 
+#include "chunker/thread/ThreadQueue.hpp"
+#include "chunker/thread/impl/ThreadQueueImpl.hpp"
 #include "chunker/util/LRUCache.hpp"
 #include "chunker/ChunkIdentifier.hpp"
 #include "chunker/TypedChunkThread.hpp"
@@ -21,8 +23,15 @@ namespace chunker {
     TypedChunkThreadPool(
       size_t max_threads,
       std::shared_ptr<ChunkGenFactory> factory
-    ) : chunk_cache(64), chunk_queue() {
+    ) : TypedChunkThreadPool(std::make_shared<impl::ThreadQueueImpl>(max_threads), factory) {}
+
+    TypedChunkThreadPool(
+      std::shared_ptr<ThreadQueue> queue,
+      std::shared_ptr<ChunkGenFactory> factory,
+      size_t priority = 0
+    ) : chunk_cache(64), chunk_queue(), thread_queue(queue) {
       // def a bug in chunk cache (idk what)
+      size_t max_threads = queue->MaxThreads();
       this->threads = max_threads;
       this->thread_list = new TypedChunkThread<ChunkGenerator, ChunkType>*[threads];
       for (int i = 0; i < threads; i++) {
@@ -31,6 +40,8 @@ namespace chunker {
           factory->Create(),
           chunk_cache,
           chunk_queue,
+          thread_queue,
+          priority,
           i
         );
       }
@@ -105,6 +116,8 @@ namespace chunker {
     size_t active_threads;
     TypedChunkThread<ChunkGenerator, ChunkType>** thread_list;
     CacheType chunk_cache;
+
+    std::shared_ptr<ThreadQueue> thread_queue;
 
     tbb::concurrent_queue<ChunkIdentifier> chunk_queue;
   };

@@ -2,6 +2,7 @@
 #define CHUNKER_ASYNC_CHUNK_WRAPPER_H_
 
 #include "chunker/AsyncChunkManager.hpp"
+#include "chunker/thread/ThreadQueue.hpp"
 #include <chrono>
 #include <mutex>
 #include <optional>
@@ -33,6 +34,14 @@ namespace chunker {
     typedef Chunk         chunk_type;
     typedef Job           job_type;
     typedef Result        result_type;
+
+    AsyncChunkWrapper(
+      Chunker chunker,
+      const std::shared_ptr<GenFactory> factory,
+      const std::shared_ptr<ThreadQueue>& queue,
+      size_t priority = 0
+    ) : manager(chunker, factory, queue, priority), result_fetched_(false) {}
+
     AsyncChunkWrapper(
       Chunker chunker,
       const std::shared_ptr<GenFactory> factory,
