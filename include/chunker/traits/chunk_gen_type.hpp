@@ -4,6 +4,7 @@
 // return desired type
 
 #include "chunker/ChunkIdentifier.hpp"
+#include "chunker/thread/ChunkerThread.hpp"
 
 #include <memory>
 #include <type_traits>
@@ -13,7 +14,7 @@ namespace chunker {
     namespace impl_ {
       struct chunk_gen_type_impl {
         template <typename ChunkGenerator, typename ReturnType,
-        typename Generate = std::is_same<ReturnType, decltype(std::declval<ChunkGenerator&>().Generate(chunker::ChunkIdentifier()))>>
+        typename Generate = std::is_same<ReturnType, decltype(std::declval<ChunkGenerator&>().Generate(chunker::ChunkIdentifier(), std::declval<ChunkerThread&>()))>>
         static std::true_type test(int);
 
         template <typename ChunkGenerator, typename ReturnType, typename...>

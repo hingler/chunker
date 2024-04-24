@@ -2,6 +2,7 @@
 #define TYPED_CHUNK_THREAD_H_
 
 #include "chunker/ChunkIdentifier.hpp"
+#include "chunker/thread/ChunkerThread.hpp"
 #include "chunker/thread/ThreadQueue.hpp"
 #include "chunker/traits/chunk_gen_type.hpp"
 
@@ -18,7 +19,7 @@
 
 namespace chunker {
   template <typename ChunkGenerator, typename ChunkType>
-  class TypedChunkThread {
+  class TypedChunkThread : public ChunkerThread {
     static_assert(chunker::traits::chunk_gen_type<ChunkGenerator, ChunkType>::value);
     public:
     TypedChunkThread(
@@ -28,7 +29,7 @@ namespace chunker {
       const std::shared_ptr<ThreadQueue>& thread_queue,
       size_t priority,
       size_t thread_id
-    ) : generator_(generator), chunk_cache_(cache), chunk_queue_(queue), thread_active_(true), thread_queue(thread_queue), thread_id_(thread_id), priority_(priority) {
+    ) : generator_(generator), chunk_cache_(cache), chunk_queue_(queue), thread_active_(true), thread_queue(thread_queue), current_handle(nullptr), thread_id_(thread_id), priority_(priority) {
       thread_ = std::thread(&TypedChunkThread::ThreadFunc, this);
       running_job_ = false;
     }
@@ -72,6 +73,14 @@ namespace chunker {
       wait_cond_.notify_all();
     }
 
+    void Yield() override {
+      if (current_handle != nullptr) {
+        current_handle->Release();
+        // release and re-acquire
+        AcquireHandle();
+      }
+    }
+
     ~TypedChunkThread() {
       // threads arent cleaning up very nicely
       thread_active_ = false;
@@ -82,6 +91,14 @@ namespace chunker {
 
     private:
     std::shared_ptr<ChunkGenerator> gen;
+
+    void AcquireHandle() {
+      current_handle = nullptr;
+
+      while (current_handle == nullptr) {
+        current_handle = thread_queue->AcquireBlocking(priority_);
+      }
+    }
 
     // thinking: we need a little bit more work to make this completely generic - worth it?
     // (issue: two completely different libraries; might be worth specializing just for sampling behavior)
@@ -126,17 +143,14 @@ namespace chunker {
           if (!chunk_cache_.Fetch(next_chunk, &chunk)) {
             // not cached
 
-            // acquire only before generating (heavier work)
-            std::shared_ptr<ThreadHandle> result(nullptr);
+            AcquireHandle();
 
-            while (result == nullptr) {
-              result = thread_queue->AcquireBlocking(priority_);
-            }
-
-            chunk = generator_->Generate(next_chunk);
+            chunk = generator_->Generate(next_chunk, *this);
             chunk_cache_.Put(
               next_chunk, chunk
             );
+
+            current_handle = nullptr;
           }
 
         }
@@ -152,6 +166,7 @@ namespace chunker {
     tbb::concurrent_queue<chunker::ChunkIdentifier>& chunk_queue_;
 
     std::shared_ptr<ThreadQueue> thread_queue;
+    std::shared_ptr<ThreadHandle> current_handle;
 
     std::shared_ptr<ChunkGenerator> generator_;
 
