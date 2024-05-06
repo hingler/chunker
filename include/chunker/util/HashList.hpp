@@ -6,6 +6,7 @@
 
 #include "chunker/util/impl/ListNode.hpp"
 #include "chunker/util/impl/HashListIterator.hpp"
+#include "gog43/Logger.hpp"
 
 namespace chunker {
   namespace util {
@@ -17,21 +18,21 @@ namespace chunker {
 
       /**
        * @brief Pushes to the front of this list
-       * 
+       *
        * @param key - key to store
        */
       void PushFront(const KeyType& key);
 
       /**
        * @brief Pushes to the back of this list
-       * 
+       *
        * @param key - key to store
        */
       void PushBack(const KeyType& key);
 
       /**
        * @brief Removes first element from list.
-       * 
+       *
        * @param output output param for list
        * @return true if list has items
        * @return false otherwise
@@ -40,7 +41,7 @@ namespace chunker {
 
       /**
        * @brief Removes last element from this list.
-       * 
+       *
        * @param output output param for list
        * @returns true if list has items, false otherwise.
        */
@@ -48,7 +49,7 @@ namespace chunker {
 
       /**
        * @brief Checks if key is in list.
-       * 
+       *
        * @param key - key to check
        * @return true if in the list
        * @return false otherwise
@@ -57,7 +58,7 @@ namespace chunker {
 
       /**
        * @brief Removes specified key from list if present
-       * 
+       *
        * @param key - key to remove
        * @return true if key in list and removed
        * @return false otherwise
@@ -78,10 +79,10 @@ namespace chunker {
       // store in disorganized heap space?
       // eh, for now
       // we can come up with something better, late
-      
+
       impl::ListNode<KeyType>* CreateListNode(const KeyType& key);
       void DeleteNode(impl::ListNode<KeyType>* node);
-      
+
       impl::ListNode<KeyType>* front;
       impl::ListNode<KeyType>* back;
       std::unordered_map<KeyType, impl::ListNode<KeyType>*> node_cache;
@@ -97,17 +98,18 @@ namespace chunker {
     template <typename KeyType>
     impl::ListNode<KeyType>* HashList<KeyType>::CreateListNode(const KeyType& key) {
       impl::ListNode<KeyType>* node = new impl::ListNode<KeyType>();
+
       mem_watch++;
       node->value = key;
       node_cache.insert(std::make_pair(key, node));
       return node;
     }
-    
+
     template <typename KeyType>
     void HashList<KeyType>::PushFront(const KeyType& key) {
       impl::ListNode<KeyType>* node;
       if (this->Contains(key)) {
-        node = node_cache.at(key);
+        node = node_cache[key];
         if (node == front) {
           return;
         }
@@ -138,7 +140,7 @@ namespace chunker {
     void HashList<KeyType>::PushBack(const KeyType& key) {
       impl::ListNode<KeyType>* node;
       if (this->Contains(key)) {
-        node = node_cache.at(key);
+        node = node_cache[key];
         if (node == back) {
           return;
         }
@@ -159,8 +161,8 @@ namespace chunker {
       }
 
       node->prev = back;
-      back->next = node;
       node->next = nullptr;
+      back->next = node;
       back = node;
     }
 

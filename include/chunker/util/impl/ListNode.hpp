@@ -7,9 +7,9 @@ namespace chunker {
     namespace impl {
       template <typename KeyType>
       struct ListNode {
-        ListNode<KeyType>* prev;
-        ListNode<KeyType>* next;
         KeyType value;
+        ListNode<KeyType>* prev = nullptr;
+        ListNode<KeyType>* next = nullptr;
       };
     }
   }

@@ -33,7 +33,7 @@ namespace chunker {
     class LRUCache {
     public:
       typedef impl::LRUCacheIterator<KeyType, ValueType> iterator;
-
+      typedef std::pair<KeyType, ValueType> pair_type;
       LRUCache(int capacity) : capacity_(capacity) {}
       bool Fetch(const KeyType& key, ValueType* output) {
         std::lock_guard lock(cache_mutex);
@@ -92,14 +92,14 @@ namespace chunker {
       }
 
       // output receives booted out value
-      CachePutResult Put(const KeyType& key, const ValueType& value, ValueType* output) {
+      CachePutResult Put(const KeyType& key, const ValueType& value, pair_type* output) {
         std::lock_guard lock(cache_mutex);
         CachePutResult res = SUCCESS;
         key_cache.PushFront(key);
         auto itr = value_cache.find(key);
         if (itr != value_cache.end()) {
           if (output != nullptr) {
-            *output = itr->second;
+            *output = *itr;
           }
           res = OVERWRITE;
         } else {
@@ -114,7 +114,7 @@ namespace chunker {
             assert(key_available);
             assert(itr != value_cache.end());
             if (output != nullptr) {
-              *output = value_cache.at(key_last);
+              *output = *itr;
             }
 
             // oops!

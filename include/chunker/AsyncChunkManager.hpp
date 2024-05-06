@@ -58,15 +58,12 @@ namespace chunker {
 
       {
         // possible deadlock
-        std::lock_guard<std::mutex> lock(queue_lock_);
+        std::lock_guard<std::recursive_mutex> lock(queue_lock_);
 
         bool queue_empty = job_queue_.empty();
 
         if (erase_queue) {
-          // flush out awaiting tasks - new job takes priority
-          while (!job_queue_.empty()) {
-            job_queue_.pop();
-          }
+          clear();
 
           // up next:
           // - work on tuning lod for performance
@@ -97,6 +94,18 @@ namespace chunker {
       return future;
     }
 
+    void clear() {
+      std::lock_guard<std::recursive_mutex> lock(queue_lock_);
+      while (!job_queue_.empty()) {
+        auto& removed_pair = job_queue_.front();
+        PromiseType& promise = removed_pair.second;
+        // resolve removed promises with empty optional
+        promise.set_value(std::optional<Result>());
+
+        job_queue_.pop();
+      }
+    }
+
     void wait() {
       pool_.Wait();
     }
@@ -105,7 +114,7 @@ namespace chunker {
       @returns number of tasks waiting to complete :):)
     */
     bool empty() {
-      std::lock_guard<std::mutex> lock(queue_lock_);
+      std::lock_guard<std::recursive_mutex> lock(queue_lock_);
       // async thread not running (last job completed) and queue is empty
       return (job_queue_.size() <= 0) && (!thread_running_.test());
     }
@@ -120,7 +129,7 @@ namespace chunker {
     void async_func() {
       pair_type item;
       {
-        std::unique_lock<std::mutex> lock(queue_lock_);
+        std::unique_lock<std::recursive_mutex> lock(queue_lock_);
         // take ownership of this element, then pop
         if (job_queue_.empty()) {
           // could have been cleared - return
@@ -148,6 +157,7 @@ namespace chunker {
 
       if (!distinct) {
         // last job matches current - bail
+        // (this is it - jobs are the same so we get an empty)
         std::lock_guard<std::mutex> async_lock(async_lock_);
         item.second.set_value(std::optional<Result>());
         thread_running_.clear();
@@ -183,7 +193,7 @@ namespace chunker {
       item.second.set_value(std::optional(r));
 
       {
-        std::lock_guard<std::mutex> lock(queue_lock_);
+        std::lock_guard<std::recursive_mutex> lock(queue_lock_);
         if (!job_queue_.empty()) {
           this->start_thread();
         } else {
@@ -193,7 +203,7 @@ namespace chunker {
       }
     }
 
-    mutable std::mutex queue_lock_;
+    mutable std::recursive_mutex queue_lock_;
     mutable std::mutex async_lock_;
     mutable std::atomic_flag thread_running_;
     std::queue<std::pair<Job, PromiseType>> job_queue_;

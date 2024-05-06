@@ -8,7 +8,6 @@ namespace chunker {
     // frees this handle manually.
     virtual void Release() = 0;
 
-    //
     virtual ~ThreadHandle() {}
   };
 }

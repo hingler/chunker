@@ -49,6 +49,7 @@ namespace chunker {
     ) : manager(chunker, factory, max_threads), result_fetched_(false) {}
 
 
+    // job queue??
     bool Update(const Job& job) {
       std::lock_guard<std::recursive_mutex> lock(job_lock_);
 
