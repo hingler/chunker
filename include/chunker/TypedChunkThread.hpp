@@ -6,9 +6,8 @@
 #include "chunker/thread/ThreadQueue.hpp"
 #include "chunker/traits/chunk_gen_type.hpp"
 
-#include <tbb/concurrent_queue.h>
 
-
+#include "chunker/util/MutexQueue.hpp"
 #include "gog43/Logger.hpp"
 
 #include <condition_variable>
@@ -25,7 +24,7 @@ namespace chunker {
     TypedChunkThread(
       std::shared_ptr<ChunkGenerator> generator,
       util::LRUCache<chunker::ChunkIdentifier, std::shared_ptr<ChunkType>>& cache,
-      tbb::concurrent_queue<chunker::ChunkIdentifier>& queue,
+      MutexQueue<chunker::ChunkIdentifier>& queue,
       const std::shared_ptr<ThreadQueue>& thread_queue,
       size_t priority,
       size_t thread_id
@@ -163,7 +162,7 @@ namespace chunker {
     util::LRUCache<chunker::ChunkIdentifier, std::shared_ptr<ChunkType>>& chunk_cache_;
 
     std::mutex queue_lock_;
-    tbb::concurrent_queue<chunker::ChunkIdentifier>& chunk_queue_;
+    MutexQueue<chunker::ChunkIdentifier>& chunk_queue_;
 
     std::shared_ptr<ThreadQueue> thread_queue;
     std::shared_ptr<ThreadHandle> current_handle;

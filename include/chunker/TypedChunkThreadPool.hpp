@@ -7,11 +7,8 @@
 #include "chunker/ChunkIdentifier.hpp"
 #include "chunker/TypedChunkThread.hpp"
 
+#include "chunker/util/MutexQueue.hpp"
 #include "gog43/Logger.hpp"
-
-// tba: chunker needs its own gog copy jej
-
-#include <tbb/concurrent_queue.h>
 
 // reuse this???
 
@@ -119,7 +116,7 @@ namespace chunker {
 
     std::shared_ptr<ThreadQueue> thread_queue;
 
-    tbb::concurrent_queue<ChunkIdentifier> chunk_queue;
+    MutexQueue<ChunkIdentifier> chunk_queue;
   };
 }
 
