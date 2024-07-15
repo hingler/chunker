@@ -172,7 +172,8 @@ namespace chunker {
       }
 
       // go w a relatively low number - just pad out to max ig
-      pool_.Reserve(ids.size() + 1);
+      // * 3 - plan for some extra room!
+      pool_.Reserve(ids.size() * 3 + 1);
 
       for (auto id : ids) {
         pool_.Enqueue(id);

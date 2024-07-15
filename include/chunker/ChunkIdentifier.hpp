@@ -51,13 +51,11 @@ namespace chunker {
 
     // vec2 specifying x/y dims
 
-
-    // (would like this if we could get a double here - for now: just use fraction?)
-    // (idea was to ensure replicability - not sure what else we want)
-    // (also: changing the identifier could muck things up in caching)
-    // (keep using fraction for now :3 - we'll provide something precise ig)
     util::Fraction scale;
     glm::u64vec2 sample_dims;
+
+    // context-dependent offset applied to sample coordinates
+    glm::i64vec2 sample_offset;
 
     ChunkNeighbors neighbors;
 
@@ -70,6 +68,8 @@ namespace chunker {
       scale = 1;
       sample_dims.x = 0;
       sample_dims.y = 0;
+
+      sample_offset = glm::i64vec2(0);
 
       neighbors.bl = 0;
       neighbors.l = 0;
@@ -91,6 +91,8 @@ namespace chunker {
       this->y =  global_offset.y;
       this->scale = scale;
       this->sample_dims = glm::ivec2(chunk_res);
+
+      this->sample_offset = glm::i64vec2(0);
 
       size_t chunk_size = static_cast<size_t>(scale * chunk_res);
       util::Fraction base_scale(tree_res, chunk_res);
@@ -123,6 +125,7 @@ namespace chunker {
       this->y = y;
       this->size = chunk_size;
       this->chunk_res = chunk_res;
+      this->sample_offset = glm::i64vec2(0);
 
       // lod calculations
       glm::vec2 near_corner = glm::vec2(tree_x - 0.5f, tree_y - 0.5f);
@@ -159,7 +162,16 @@ namespace chunker {
     // (probably just eight ints specifying the chunk's eight neighbors as these are relevant for generation as well)
 
     bool operator==(const ChunkIdentifier& rhs) const {
-      return (rhs.x == x && rhs.y == y && rhs.size == size && rhs.chunk_res == chunk_res && rhs.scale == scale && rhs.sample_dims == sample_dims && rhs.neighbors == neighbors);
+      return (
+        rhs.x == x
+        && rhs.y == y
+        && rhs.size == size
+        && rhs.chunk_res == chunk_res
+        && rhs.scale == scale
+        && rhs.sample_dims == sample_dims
+        && rhs.neighbors == neighbors
+        && rhs.sample_offset == sample_offset
+      );
     }
   };
 }
@@ -187,11 +199,17 @@ namespace std {
     std::hash<long> long_hash;
     std::hash<size_t> size_t_hash;
     std::hash<glm::u64vec2> vec_hash;
+    std::hash<glm::i64vec2> offset_hash;
     std::hash<chunker::util::Fraction> fract_hash;
     std::hash<chunker::ChunkNeighbors> neighbor_hash;
     size_t operator()(const chunker::ChunkIdentifier& identifier) const {
       // this is fine for now i think
-      return ((long_hash(identifier.x) ^ long_hash(identifier.y) + vec_hash(identifier.sample_dims)) * identifier.size ^ identifier.chunk_res) ^ fract_hash(identifier.scale) ^ neighbor_hash(identifier.neighbors);
+      return
+      (
+        (
+          long_hash(identifier.x) ^ long_hash(identifier.y) + vec_hash(identifier.sample_dims)
+        ) * identifier.size ^ identifier.chunk_res
+      ) ^ fract_hash(identifier.scale) ^ neighbor_hash(identifier.neighbors) ^ offset_hash(identifier.sample_offset);
     }
   };
 }
