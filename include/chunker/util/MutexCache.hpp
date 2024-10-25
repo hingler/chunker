@@ -15,6 +15,8 @@ namespace chunker {
       // womp womp
       friend class MutexCache;
      public:
+      LockHandle() : key(), lock(nullptr), value() {}
+
       bool Available() const {
         return value.has_value();
       }
@@ -50,15 +52,28 @@ namespace chunker {
     MutexCache() {}
 
     LockHandle Acquire(const KeyType& key) {
+      LockHandle res;
+      Acquire(res, key, true);
+      return res;
+    }
+
+    // only returns false if "block" is set to false
+    bool Acquire(
+      LockHandle& output,
+      const KeyType& key,
+      bool block = true
+    ) {
       std::unique_lock cache_lock(cache_mutex);
 
       auto itr_value = value_cache.find(key);
       if (itr_value != value_cache.end()) {
-        return LockHandle(
+        output = LockHandle(
           key,
           nullptr,
           std::optional<ValueType>(itr_value->second)
         );
+
+        return true;
       }
 
       mutex_ptr key_mutex;
@@ -70,7 +85,16 @@ namespace chunker {
         // key mutex is locked on this flow
 
         cache_lock.unlock();
-        key_mutex->lock();
+
+        // to improve perf: timeout here
+
+        if (block) {
+          key_mutex->lock();
+        } else if (!key_mutex->try_lock()) {
+          // could not lock it right away, return false
+          return false;
+        }
+
         cache_lock.lock();
 
         itr_value = value_cache.find(key);
@@ -78,11 +102,13 @@ namespace chunker {
           // same thing - value's not available
           // key lock released on return
           key_mutex->unlock();
-          return LockHandle(
+          output = LockHandle(
             key,
             nullptr,
             std::optional<ValueType>(itr_value->second)
           );
+
+          return true;
         }
 
         // if here: cache lock is owned
@@ -103,11 +129,13 @@ namespace chunker {
       // key mutex populated and held
 
       // when lockhandle goes out of scope, we release
-      return LockHandle(
+      output = LockHandle(
         key,
         key_mutex,
         std::optional<ValueType>()
       );
+
+      return true;
     }
 
     void Release(

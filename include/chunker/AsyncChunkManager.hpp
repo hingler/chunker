@@ -1,6 +1,7 @@
 #ifndef ASYNC_CHUNK_MANAGER_H_
 #define ASYNC_CHUNK_MANAGER_H_
 
+#include <chrono>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -40,14 +41,14 @@ namespace chunker {
       Chunker chunker,
       std::shared_ptr<GenFactory> factory,
       size_t max_threads
-    ) : thread_running_(false), chunker_(chunker), factory_(factory), pool_(max_threads, factory_), last_job_() {}
+    ) : thread_running_(false), chunker_(chunker), factory_(factory), pool_(max_threads, factory_), last_job_(), priority(99999) {}
 
     AsyncChunkManager(
       Chunker chunker,
       std::shared_ptr<GenFactory> factory,
       std::shared_ptr<ThreadQueue> queue,
       size_t priority = 0
-    ) : thread_running_(false), chunker_(chunker), factory_(factory), pool_(queue, factory, priority), last_job_() {}
+    ) : thread_running_(false), chunker_(chunker), factory_(factory), pool_(queue, factory, priority), last_job_(), priority(priority) {}
     // result type needs to be shared if this is the case
     // note: we still need to wrap this with some sort of "job queueing" or "job wrapping" system
     // whatever lol thats fine though
@@ -143,6 +144,7 @@ namespace chunker {
         job_queue_.pop();
       }
 
+      auto job_start = std::chrono::high_resolution_clock::now();
       bool distinct = true;
       std::vector<ChunkIdentifier> ids = chunker_.Chunk(item.first);
       if (ids.size() == last_job_.size()) {
@@ -192,6 +194,10 @@ namespace chunker {
 
       Result r = chunker_.Stitch(item.first, chunks);
       item.second.set_value(std::optional(r));
+      auto job_end = std::chrono::high_resolution_clock::now();
+
+      const double ms = std::chrono::duration_cast<std::chrono::nanoseconds>(job_end - job_start).count() / 1000000.0;
+
 
       {
         std::lock_guard<std::recursive_mutex> lock(queue_lock_);
@@ -213,6 +219,8 @@ namespace chunker {
 
     Chunker chunker_;
     std::shared_ptr<GenFactory> factory_;
+
+    const size_t priority;
 
     TypedChunkThreadPool<GenFactory, Generator, Chunk> pool_;
   };
